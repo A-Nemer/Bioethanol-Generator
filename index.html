@@ -3,145 +3,406 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mud Battery: STREAM Project</title>
+    <title>Interactive Bioethanol Energy Cycle 3D Model</title>
+    <!-- Load Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Load OrbitControls for camera movement -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
-            background-color: #f4f4f9;
-            color: #333;
-        }
-        header {
-            background: #5cb85c;
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        header h1 {
-            margin: 0;
-            font-size: 2.5em;
-        }
-        nav {
-            text-align: center;
-            padding: 10px 0;
-            background: #444;
-            color: white;
-            position: sticky;
-            top: 60px;
-            z-index: 1000;
-        }
-        nav a {
-            color: white;
-            margin: 0 15px;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        nav a:hover {
-            text-decoration: underline;
-        }
-        .container {
-            width: 90%;
-            margin: 20px auto;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-        section h2 {
-            color: #5cb85c;
-            border-bottom: 2px solid #5cb85c;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
-        }
-        section img {
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #0f172a; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
             width: 100%;
-            height: auto;
-            margin: 10px 0;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        footer {
-            background: #444;
-            color: white;
             text-align: center;
-            padding: 10px 0;
-            margin-top: 20px;
+            color: #10b981;
+            font-size: 24px;
+            font-weight: 700;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        #controls-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: #cbd5e1;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>Mud Batteries: STREAM Project</h1>
-        <p>Empowering communities through innovation and sustainability</p>
-    </header>
-    <nav>
-        <a href="#science">Science</a>
-        <a href="#technology">Technology</a>
-        <a href="#research">Research</a>
-        <a href="#engineering">Engineering</a>
-        <a href="#art">Art</a>
-        <a href="#math">Math</a>
-        <a href="#impact">Real-World Impact</a>
-    </nav>
-    <div class="container">
-        <section id="science">
-            <h2>Science</h2>
-            <img src="https://eepower.com/uploads/articles/microbe-hero.jpg" alt="Microbial Fuel Cell">
-            <p>
-                Mud batteries leverage microbial fuel cell technology, where microorganisms in mud break down organic materials and release electrons. These electrons flow through an external circuit to generate electricity. By harnessing natural biochemical reactions, mud batteries offer a sustainable and renewable energy source, merging biology and chemistry into practical applications.
-            </p>
-        </section>
-        <section id="technology">
-            <h2>Technology</h2>
-            <img src="https://media.istockphoto.com/id/1401460590/photo/businessman-working-on-laptop-with-document-management-icon.jpg?s=612x612&w=0&k=20&c=o8Ci6F_YCWFlKE2Yr6A2wbDvrZRwSB3YssLakLkrFBo=" alt="Electrode Technology">
-            <p>
-                The technological foundation of mud batteries involves simple materials like graphite electrodes and conductive circuits. Researchers aim to improve electrode materials, incorporate sensors to monitor microbial activity, and use IoT for real-time data collection. These advancements drive mud batteries closer to real-world deployment.
-            </p>
-        </section>
-        <section id="research">
-            <h2>Research</h2>
-            <img src="https://media.istockphoto.com/id/1352603244/photo/shot-of-an-unrecognizable-businessman-working-on-his-laptop-in-the-office.jpg?s=612x612&w=0&k=20&c=upiDYeAZEsxbUBdhX35MXm79drIXA-5Q-FcfmZk71lM=" alt="Research Process">
-            <p>
-                Ongoing research focuses on optimizing microbial communities, enhancing electrode performance, and analyzing the feasibility of mud batteries in rural areas. Studies highlight their potential to complement renewable energy sources while promoting sustainability and resourcefulness in underserved communities.
-            </p>
-        </section>
-        <section id="engineering">
-            <h2>Engineering</h2>
-            <img src="https://minutemedia-ressh.cloudinary.com/image/upload/v1645368250/shape/cover/sport/mud-guys-f9b52174bbe18eb462926700e3e3db1d.jpg" alt="Engineering Prototypes">
-            <p>
-                Engineers design mud battery prototypes by incorporating efficient anode and cathode materials, robust containers, and low-loss wiring. These designs ensure stability, scalability, and functionality for diverse applications, from powering small devices to educational purposes in STEM programs.
-            </p>
-        </section>
-        <section id="art">
-            <h2>Art</h2>
-            <img src="https://i.ytimg.com/vi/0IXu9_plqQo/maxresdefault.jpg" alt="Artistic Infographics">
-            <p>
-                Art plays a vital role in making the science behind mud batteries accessible and engaging. Infographics, videos, and visually appealing prototypes help communicate the concept effectively, bridging the gap between technical knowledge and public understanding.
-            </p>
-        </section>
-        <section id="math">
-            <h2>Math</h2>
-            <img src="https://as2.ftcdn.net/v2/jpg/01/59/30/79/1000_F_159307968_Ag88FlCW7OU1YkAqF5ntJGQNUp6LXZVX.jpg" alt="Math Simulations">
-            <p>
-                Math ensures reliability and efficiency in mud batteries by calculating voltage, current output, and efficiency metrics. Simulations and scalability models provide insights into their performance in larger setups, making data analysis a cornerstone of the project.
-            </p>
-        </section>
-        <section id="impact">
-            <h2>Real-World Impact</h2>
-            <img src="https://img.freepik.com/free-photo/dreamy-aesthetic-color-year-tones-nature-landscape_23-2151393832.jpg" alt="Global Impact">
-            <p>
-                With 1.6 billion people lacking reliable electricity, mud batteries offer a stepping stone to sustainable energy. They provide basic lighting, power small devices, and promote resourcefulness in underserved communities. Mud batteries inspire hope and resilience by bridging energy gaps sustainably.
-            </p>
-        </section>
-    </div>
-    <footer>
-        <p>2024 - Ali Nemer - Mud Battery STREAM Project</p>
-    </footer>
+    <div id="info">Interactive Bioethanol Energy Cycle 3D Model</div>
+    <div id="controls-hint">Use mouse/touch to rotate (left click) and zoom (scroll/pinch).</div>
+    <script>
+        // Global variables for Three.js
+        let scene, camera, renderer, controls, generatorLight;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // --- Texture Generation Functions ---
+        // Generates the texture for the LCD screen with live data
+        function createLcdTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#003300'; // Dark LCD green background
+            ctx.fillRect(0, 0, 512, 512);
+
+            ctx.font = '70px "Roboto Mono"';
+            ctx.fillStyle = '#33FF33'; // Bright green text
+            ctx.textAlign = 'left';
+            
+            ctx.fillText('TEMP: 35.7' + String.fromCharCode(176) + 'C', 40, 150); // Degree symbol
+            ctx.fillText('CO2: 45.1 kPa', 40, 280);
+            
+            ctx.font = '90px "Roboto Mono"';
+            ctx.fillStyle = '#FFFF00'; // Yellow status
+            ctx.fillText('ACTIVE', 40, 430);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+        
+        // Generates a simple text label texture
+        function createLabelTexture(text, width, height, color, bgcolor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = bgcolor;
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.font = '70px sans-serif';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Generates the specific label for the Bioethanol Vial
+        function createVialLabelTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 512, 128);
+
+            ctx.font = '60px "Roboto Mono"';
+            ctx.fillStyle = '#ff6347'; // Standout color
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Bioethanol Output', 256, 64);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- Initialization ---
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1e293b);
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Spotlight for the Generator (simulating the powered LED/Fan)
+            generatorLight = new THREE.SpotLight(0xfcd34d, 5, 20, Math.PI / 4, 0.5, 2);
+            generatorLight.position.set(5.5, 3, 1.5);
+            generatorLight.target.position.set(5.5, 1.5, 5); 
+            generatorLight.castShadow = true;
+            scene.add(generatorLight);
+            scene.add(generatorLight.target);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 5;
+            controls.maxDistance = 20;
+
+            buildModel();
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        // --- Model Geometry Functions ---
+        function createJar() {
+            const jarGroup = new THREE.Group();
+            
+            // Jar Body (Simulated Glass)
+            const jarGeometry = new THREE.CylinderGeometry(2, 2, 4, 32);
+            const jarMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.05,
+                transmission: 0.9, 
+                transparent: true,
+                opacity: 0.9,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+                side: THREE.DoubleSide
+            });
+            const jarMesh = new THREE.Mesh(jarGeometry, jarMaterial);
+            jarMesh.position.y = 2;
+            jarMesh.receiveShadow = true;
+            jarMesh.castShadow = true;
+            jarGroup.add(jarMesh);
+
+            // Fermentation Liquid/Slurry (Represents potato/date waste)
+            const liquidGeometry = new THREE.CylinderGeometry(1.9, 1.9, 3, 32);
+            const liquidMaterial = new THREE.MeshStandardMaterial({
+                color: 0x4b5563, // Dark grey/sludge
+                roughness: 0.8,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.95
+            });
+            const liquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
+            liquidMesh.position.y = 1.5;
+            jarGroup.add(liquidMesh);
+
+            // Sensors (Probes) - Penetrating the lid
+            const sensorMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.1 });
+            
+            // Temp Probe (T) 
+            const probeT = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.5, 16), sensorMaterial);
+            probeT.position.set(1.0, 2.5, 0); 
+            jarGroup.add(probeT);
+            
+            // Pressure/Gas Probe (P) 
+            const probeP = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4, 16), sensorMaterial);
+            probeP.position.set(-1.0, 2.8, 0.5);
+            jarGroup.add(probeP);
+            
+            // Jar Lid (Grey plastic)
+            const lidGeometry = new THREE.TorusGeometry(2, 0.1, 16, 100);
+            const lidMaterial = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
+            const lidMesh = new THREE.Mesh(lidGeometry, lidMaterial);
+            lidMesh.rotation.x = Math.PI / 2;
+            lidMesh.position.y = 4.0;
+            jarGroup.add(lidMesh);
+
+            // CO2 Capture Balloon (Purple, semi-inflated)
+            const balloonGeometry = new THREE.SphereGeometry(1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const balloonMaterial = new THREE.MeshPhongMaterial({
+                color: 0x9333ea, // Purple balloon
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            const balloonMesh = new THREE.Mesh(balloonGeometry, balloonMaterial);
+            balloonMesh.position.y = 4.0; 
+            jarGroup.add(balloonMesh);
+            
+            // Jar position on the base
+            jarGroup.position.x = -3;
+            jarGroup.position.z = 0;
+            
+            scene.add(jarGroup);
+            return { jarGroup, probeT, probeP };
+        }
+
+        function createArduinoDisplay() {
+            const arduinoGroup = new THREE.Group();
+            
+            // Arduino/Mounting Box 
+            const housingGeometry = new THREE.BoxGeometry(3, 0.5, 4);
+            const housingMaterial = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 });
+            const housingMesh = new THREE.Mesh(housingGeometry, housingMaterial);
+            housingMesh.position.y = 0.5;
+            arduinoGroup.add(housingMesh);
+            
+            // LCD Screen Display
+            const lcdTexture = createLcdTexture();
+            const displayGeometry = new THREE.PlaneGeometry(2.3, 3.3);
+            const displayMaterial = new THREE.MeshBasicMaterial({ map: lcdTexture, side: THREE.DoubleSide });
+            const displayMesh = new THREE.Mesh(displayGeometry, displayMaterial);
+            displayMesh.rotation.x = -Math.PI / 2;
+            displayMesh.position.set(0, 0.77, 0);
+            arduinoGroup.add(displayMesh);
+
+            // Arduino position on the base
+            arduinoGroup.position.x = 1.5;
+            arduinoGroup.position.z = 0;
+            
+            scene.add(arduinoGroup);
+            return arduinoGroup;
+        }
+
+        function createGeneratorBox() {
+            const generatorGroup = new THREE.Group();
+            
+            // Generator Box (Black Box)
+            const boxGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const boxMaterial = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5, metalness: 0.1 });
+            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+            boxMesh.position.y = 1.5;
+            boxMesh.castShadow = true;
+            generatorGroup.add(boxMesh);
+
+            // Generator Label (Textured Front)
+            const labelTexture = createLabelTexture('BIOETHANOL GENERATOR', 512, 512, '#ffffff', '#0f172a');
+            const labelGeometry = new THREE.PlaneGeometry(2.8, 2.8);
+            const labelMaterial = new THREE.MeshStandardMaterial({ map: labelTexture, side: THREE.FrontSide });
+            const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+            labelMesh.position.set(0, 1.5, 1.51);
+            generatorGroup.add(labelMesh);
+
+
+            // Simulated LED/Fan Output (Emissive Light Source)
+            const ledGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32);
+            const ledMaterial = new THREE.MeshPhongMaterial({ color: 0xfcd34d, emissive: 0xfcd34d, emissiveIntensity: 2 }); // Bright glow
+            const ledMesh = new THREE.Mesh(ledGeometry, ledMaterial);
+            ledMesh.rotation.x = Math.PI / 2;
+            ledMesh.position.set(0, 1.5, 1.51);
+            generatorGroup.add(ledMesh);
+
+            // Red Toggle Switch
+            const switchGeometry = new THREE.BoxGeometry(0.5, 0.3, 0.2);
+            const switchMaterial = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
+            const switchMesh = new THREE.Mesh(switchGeometry, switchMaterial);
+            switchMesh.position.set(0, 0.5, 1.51);
+            generatorGroup.add(switchMesh);
+            
+            // Generator position on the base
+            generatorGroup.position.x = 5.5;
+            generatorGroup.position.z = 0;
+            
+            scene.add(generatorGroup);
+            return generatorGroup;
+        }
+
+        function createPlatform() {
+            const platformGeometry = new THREE.BoxGeometry(12, 0.4, 6);
+            const platformMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4, metalness: 0.1 });
+            const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+            platformMesh.position.y = -0.2;
+            platformMesh.receiveShadow = true;
+            scene.add(platformMesh);
+        }
+
+        // Creates the final output vial
+        function createVial(position) {
+            const vialGroup = new THREE.Group();
+
+            // Vial Glass
+            const vialGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 32);
+            const vialMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff, transmission: 0.8, transparent: true, opacity: 0.9, roughness: 0.1
+            });
+            const vialMesh = new THREE.Mesh(vialGeometry, vialMaterial);
+            vialMesh.position.y = 1;
+            vialGroup.add(vialMesh);
+
+            // Ethanol Liquid (Amber Color)
+            const ethanolGeometry = new THREE.CylinderGeometry(0.45, 0.45, 1.5, 32);
+            const ethanolMaterial = new THREE.MeshStandardMaterial({ color: 0xfb923c, roughness: 0.5 }); // Amber
+            const ethanolMesh = new THREE.Mesh(ethanolGeometry, ethanolMaterial);
+            ethanolMesh.position.y = 0.75;
+            vialGroup.add(ethanolMesh);
+
+            // Vial Label (Bioethanol Output)
+            const labelTexture = createVialLabelTexture();
+            const labelMaterial = new THREE.MeshStandardMaterial({ map: labelTexture, transparent: true, opacity: 0.9 });
+            const labelGeometry = new THREE.CylinderGeometry(0.51, 0.51, 1.5, 32, 1, true); 
+            const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+            labelMesh.position.y = 0.75;
+            vialGroup.add(labelMesh);
+            
+            vialGroup.position.copy(position);
+            scene.add(vialGroup);
+        }
+        
+        // Function to create connecting wires
+        function createWire(startPos, endPos, color) {
+            const curve = new THREE.CatmullRomCurve3([
+                startPos,
+                new THREE.Vector3(startPos.x, startPos.y + 1, startPos.z), 
+                new THREE.Vector3(endPos.x, endPos.y + 0.5, endPos.z),
+                endPos
+            ]);
+            const geometry = new THREE.TubeGeometry(curve, 20, 0.08, 6, false);
+            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+        }
+
+        function buildModel() {
+            createPlatform();
+            const { jarGroup, probeT, probeP } = createJar();
+            const arduinoGroup = createArduinoDisplay();
+            const generatorGroup = createGeneratorBox();
+            
+            // Position the Bioethanol Vial
+            createVial(new THREE.Vector3(generatorGroup.position.x - 2, 0, 1.5));
+
+            // --- WIRING --- (Connecting the system elements)
+            
+            // 1. Temp Sensor (T) to Arduino (Orange)
+            const tStart = new THREE.Vector3(probeT.position.x + jarGroup.position.x, probeT.position.y + jarGroup.position.y, probeT.position.z + jarGroup.position.z);
+            const tEnd = new THREE.Vector3(arduinoGroup.position.x - 1, arduinoGroup.position.y + 0.5, arduinoGroup.position.z + 1.8);
+            createWire(tStart, tEnd, 0xfb923c); // Orange wire
+
+            // 2. Pressure/Gas Sensor (P) to Arduino (Blue)
+            const pStart = new THREE.Vector3(probeP.position.x + jarGroup.position.x, probeP.position.y + jarGroup.position.y, probeP.position.z + jarGroup.position.z);
+            const pEnd = new THREE.Vector3(arduinoGroup.position.x + 1, arduinoGroup.position.y + 0.5, arduinoGroup.position.z + 1.8);
+            createWire(pStart, pEnd, 0x3b82f6); // Blue wire
+            
+            // 3. Arduino to Generator (Activation Logic) (Red)
+            const activationStart = new THREE.Vector3(arduinoGroup.position.x, arduinoGroup.position.y + 0.5, arduinoGroup.position.z - 1.8);
+            const activationEnd = new THREE.Vector3(generatorGroup.position.x, generatorGroup.position.y + 2.5, generatorGroup.position.z + 1.5);
+            createWire(activationStart, activationEnd, 0xdc2626); // Red wire
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Resize Handler ---
+        function onWindowResize() {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            camera.aspect = newWidth / newHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(newWidth, newHeight);
+        }
+
+        // Start the application
+        window.onload = function () {
+            init();
+            animate();
+        };
+
+    </script>
 </body>
 </html>
