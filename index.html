@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Bioethanol Energy Cycle 3D Model</title>
+    <title>Interactive Bioethanol Energy Cycle 3D Model with Labels</title>
     <!-- Load Three.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Load OrbitControls for camera movement -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #0f172a; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #0f172a; display: flex; }
+        canvas { display: block; flex-grow: 1; }
         #info {
             position: absolute;
             top: 10px;
@@ -21,31 +22,162 @@
             font-size: 24px;
             font-weight: 700;
             text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            z-index: 10;
         }
         #controls-hint {
             position: absolute;
             bottom: 10px;
-            left: 10px;
+            left: 20px;
             color: #cbd5e1;
             font-size: 14px;
             background: rgba(0, 0, 0, 0.5);
             padding: 8px;
             border-radius: 5px;
+            z-index: 10;
+        }
+        #control-panel {
+            width: 350px;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 2px solid #334155;
+            z-index: 10;
+            height: 100vh;
+        }
+        .stage-button {
+            transition: all 0.2s;
+        }
+        .stage-button.active {
+            background-color: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+        .stage-button:disabled {
+            background-color: #374151;
+            cursor: not-allowed;
+            opacity: 0.7;
         }
     </style>
 </head>
 <body>
-    <div id="info">Interactive Bioethanol Energy Cycle 3D Model</div>
+    <div id="info">Bioethanol Prototype: Multi-Stage Energy Cycle</div>
+
+    <!-- Control Panel for Stepping Through Stages -->
+    <div id="control-panel">
+        <h2 class="text-xl font-bold mb-4 text-emerald-400">Prototype Control</h2>
+        <div id="current-stage-display" class="bg-gray-700 p-3 rounded-lg mb-4 text-center text-lg font-mono">
+            STAGE 1: FEEDSTOCK
+        </div>
+        <p class="text-sm text-gray-400 mb-4">Click "Next Stage" to advance the simulation and trigger events in the 3D model.</p>
+        
+        <button id="next-stage-button" class="stage-button w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg">
+            Next Stage (1/8)
+        </button>
+
+        <h3 class="text-lg font-bold mt-6 mb-2 text-gray-300">Stage Summary</h3>
+        <p id="stage-description" class="text-sm text-gray-400">
+            Initial stage: introducing pre-chopped potato peel and date mash feedstock into the processing unit.
+        </p>
+
+        <h3 class="text-lg font-bold mt-6 mb-2 text-gray-300">Model Status</h3>
+        <ul class="text-sm space-y-2 font-mono">
+            <li class="flex justify-between">Purity: <span id="status-purity" class="text-yellow-400">0.0%</span></li>
+            <li class="flex justify-between">CO2 Level: <span id="status-co2" class="text-blue-400">0 kPa</span></li>
+            <li class="flex justify-between">Generator: <span id="status-generator" class="text-red-400">OFF</span></li>
+        </ul>
+    </div>
+
     <div id="controls-hint">Use mouse/touch to rotate (left click) and zoom (scroll/pinch).</div>
+
     <script>
-        // Global variables for Three.js
-        let scene, camera, renderer, controls, generatorLight;
+        // Global variables for Three.js and Simulation State
+        let scene, camera, renderer, controls, generatorLight, lcdTexture, jarGroup, co2Balloon;
+        let purificationTower, purificationLights = {};
+        let ethanolLiquid; 
+
         const width = window.innerWidth;
         const height = window.innerHeight;
 
+        // --- SIMULATION STATE ---
+        const SIM_STATE = {
+            stage: 1,
+            maxStages: 8,
+            purity: 0.0,
+            co2Pressure: 0,
+            temp: 25.0,
+            generatorActive: false,
+            // 3D Model References
+            lcdMaterial: null,
+            co2BalloonMesh: null,
+            liquidMesh: null,
+            reactorPaddleMesh: null, 
+            generatorFanMesh: null, 
+            ledMesh: null,
+            distillationLight: null,
+        };
+
+        // --- STAGE DEFINITIONS ---
+        const STAGES = {
+            1: { name: "Feedstock Input & Mechanical Processing", purity: 0.0, co2: 0, desc: "Simulates mechanical pretreatment. Paddle turns to increase surface area of waste feedstock.", status: "PRETREATMENT READY" },
+            2: { name: "Pretreatment / Saccharification", purity: 5.0, co2: 5, desc: "Enzymes break down long-chain starches into simple, fermentable glucose sugars.", status: "ENZYMES ADDED" },
+            3: { name: "Micro-Fermentation Chamber", purity: 40.0, co2: 45, desc: "Yeast consumes sugars, producing Ethanol and CO₂ gas. Temperature logging is active.", status: "ACTIVE FERMENTATION" },
+            4: { name: "Quantifying Ethanol Production", purity: 50.0, co2: 55, desc: "Data sheet presented. ABV calculated (simulated 5.4%). CO₂ production corroborates yield.", status: "DATA LOGGED" },
+            5: { name: "Solid–Liquid Separation & Co-Product", purity: 60.0, co2: 55, desc: "Crude ethanol solution drained (liquid). Solid residue (fertilizer) remains (visual change in jar).", status: "SEPARATION COMPLETE" },
+            6: { name: "Purification Stage (Simulated)", purity: 95.6, co2: 55, desc: "Multi-stage process initiated. Stage 6.2 completes at 95.6% purity (azeotrope limit).", status: "PURIFICATION IN PROGRESS" },
+            7: { name: "Energy Output Simulation", purity: 99.9, co2: 55, desc: "Final 99.9% fuel validated. Generator relay closes, converting chemical energy to mechanical/electrical power.", status: "FUEL VALIDATED: 99.9%" },
+            8: { name: "Data Export and Final Reporting", purity: 99.9, co2: 55, desc: "Final, quantitative proof of the entire process presented for scientific claims and validation.", status: "REPORTING COMPLETE" },
+        };
+
+        // --- LABEL GENERATION FUNCTIONS ---
+
+        function createTextSprite(message, color = '#ffffff', fontSize = 24, borderColor = '#000000', backgroundColor = 'rgba(0,0,0,0.7)') {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = `Bold ${fontSize}px Arial`;
+            const metrics = context.measureText(message);
+            const textWidth = metrics.width;
+            
+            // Set canvas dimensions
+            const borderSize = 2;
+            canvas.width = textWidth + borderSize * 4; // Added extra padding
+            canvas.height = fontSize * 1.5;
+            
+            // Re-set font for the new canvas size
+            context.font = `Bold ${fontSize}px Arial`;
+            
+            // Draw background
+            context.fillStyle = backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw border
+            context.strokeStyle = borderColor;
+            context.lineWidth = borderSize;
+            context.strokeRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw text
+            context.fillStyle = color;
+            context.textAlign = 'left';
+            context.textBaseline = 'top';
+            context.fillText(message, borderSize * 2, borderSize + (fontSize * 0.2));
+
+            const texture = new THREE.CanvasTexture(canvas);
+            
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            
+            // Scale the sprite based on the canvas dimensions (using 75 for smaller size)
+            sprite.scale.set(canvas.width / 75, canvas.height / 75, 1.0);
+            return sprite;
+        }
+
+        function createLabel(text, position, offset = new THREE.Vector3(0, 0.5, 0)) {
+            const sprite = createTextSprite(text);
+            sprite.position.copy(position).add(offset);
+            scene.add(sprite);
+        }
+
         // --- Texture Generation Functions ---
-        // Generates the texture for the LCD screen with live data
-        function createLcdTexture() {
+        function createLcdTexture(stageData) {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
             canvas.height = 512;
@@ -54,57 +186,33 @@
             ctx.fillStyle = '#003300'; // Dark LCD green background
             ctx.fillRect(0, 0, 512, 512);
 
-            ctx.font = '70px "Roboto Mono"';
+            ctx.font = '50px "Roboto Mono"';
             ctx.fillStyle = '#33FF33'; // Bright green text
             ctx.textAlign = 'left';
-            
-            ctx.fillText('TEMP: 35.7' + String.fromCharCode(176) + 'C', 40, 150); // Degree symbol
-            ctx.fillText('CO2: 45.1 kPa', 40, 280);
-            
-            ctx.font = '90px "Roboto Mono"';
-            ctx.fillStyle = '#FFFF00'; // Yellow status
-            ctx.fillText('ACTIVE', 40, 430);
 
+            // Stage Info
+            ctx.fillText(`STAGE ${stageData.stage}: ${STAGES[stageData.stage].name.substring(0, 20)}`, 40, 100);
+
+            // Dynamic Values
+            ctx.font = '70px "Roboto Mono"';
+            ctx.fillStyle = stageData.purity > 99 ? '#FFFF00' : '#33FF33'; 
+            ctx.fillText(`PURITY: ${stageData.purity.toFixed(1)}%`, 40, 250);
+            
+            ctx.font = '70px "Roboto Mono"';
+            ctx.fillStyle = '#33FF33';
+            // CO₂ gas production (using co2Pressure)
+            ctx.fillText(`CO2: ${stageData.co2Pressure.toFixed(1)} kPa`, 40, 350); 
+            
+            ctx.font = '60px "Roboto Mono"';
+            ctx.fillStyle = stageData.generatorActive ? '#FF6347' : '#FFFF00';
+            ctx.fillText(STAGES[stageData.stage].status, 40, 450);
+
+            if (SIM_STATE.lcdMaterial) {
+                SIM_STATE.lcdMaterial.map.needsUpdate = true;
+            }
             return new THREE.CanvasTexture(canvas);
         }
         
-        // Generates a simple text label texture
-        function createLabelTexture(text, width, height, color, bgcolor) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = bgcolor;
-            ctx.fillRect(0, 0, width, height);
-            
-            ctx.font = '70px sans-serif';
-            ctx.fillStyle = color;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, width / 2, height / 2);
-
-            return new THREE.CanvasTexture(canvas);
-        }
-
-        // Generates the specific label for the Bioethanol Vial
-        function createVialLabelTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, 0, 512, 128);
-
-            ctx.font = '60px "Roboto Mono"';
-            ctx.fillStyle = '#ff6347'; // Standout color
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('Bioethanol Output', 256, 64);
-
-            return new THREE.CanvasTexture(canvas);
-        }
 
         // --- Initialization ---
         function init() {
@@ -113,29 +221,29 @@
             scene.background = new THREE.Color(0x1e293b);
 
             // Camera Setup
-            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-            camera.position.set(0, 5, 10);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 7, 18); 
 
             // Renderer Setup
             renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(width, height);
+            renderer.setSize(window.innerWidth - 350, window.innerHeight); 
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.body.appendChild(renderer.domElement);
+            document.body.insertBefore(renderer.domElement, document.getElementById('control-panel')); 
 
             // Lighting
             const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
             scene.add(ambientLight);
 
             const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
-            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.position.set(10, 15, 7.5);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
             
-            // Spotlight for the Generator (simulating the powered LED/Fan)
-            generatorLight = new THREE.SpotLight(0xfcd34d, 5, 20, Math.PI / 4, 0.5, 2);
-            generatorLight.position.set(5.5, 3, 1.5);
-            generatorLight.target.position.set(5.5, 1.5, 5); 
+            // Spotlight for the Generator
+            generatorLight = new THREE.SpotLight(0xfcd34d, 0, 15, Math.PI / 4, 0.5, 2); 
+            generatorLight.position.set(7, 4, 0); 
+            generatorLight.target.position.set(7, 2, 0); 
             generatorLight.castShadow = true;
             scene.add(generatorLight);
             scene.add(generatorLight.target);
@@ -146,166 +254,182 @@
             controls.dampingFactor = 0.05;
             controls.screenSpacePanning = false;
             controls.minDistance = 5;
-            controls.maxDistance = 20;
+            controls.maxDistance = 30;
 
             buildModel();
+            setupEventListeners();
+            updateControlPanel(); 
             window.addEventListener('resize', onWindowResize, false);
         }
 
         // --- Model Geometry Functions ---
-        function createJar() {
-            const jarGroup = new THREE.Group();
+        
+        function createPlatform() {
+            const platformGeometry = new THREE.BoxGeometry(16, 0.5, 8);
+            const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x607d8b, roughness: 0.7, metalness: 0.1 });
+            const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+            platformMesh.position.y = -0.25;
+            platformMesh.receiveShadow = true;
+            scene.add(platformMesh);
+        }
+
+        function createFermentationReactor() {
+            const group = new THREE.Group();
             
-            // Jar Body (Simulated Glass)
-            const jarGeometry = new THREE.CylinderGeometry(2, 2, 4, 32);
-            const jarMaterial = new THREE.MeshPhysicalMaterial({
-                color: 0xffffff,
-                metalness: 0.1,
-                roughness: 0.05,
-                transmission: 0.9, 
+            // Reactor Body (Simulated Metal/Opaque)
+            const bodyGeometry = new THREE.CylinderGeometry(2.5, 2.5, 5, 32);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.5, metalness: 0.2 });
+            const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            bodyMesh.position.y = 2.5;
+            bodyMesh.castShadow = true;
+            group.add(bodyMesh);
+
+            // Feedstock/Slurry (Initial contents)
+            const liquidGeometry = new THREE.CylinderGeometry(2.4, 2.4, 2, 32);
+            const liquidMaterial = new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.8 }); // Brown/Sludge
+            let liquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
+            liquidMesh.position.y = 1;
+            group.add(liquidMesh);
+            SIM_STATE.liquidMesh = liquidMesh;
+
+
+            // Enzyme Cartridge Slot (Step 2)
+            const cartridgeGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const cartridgeMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.5 }); // Purple
+            const cartridgeMesh = new THREE.Mesh(cartridgeGeometry, cartridgeMaterial);
+            cartridgeMesh.position.set(2.6, 3.5, 0);
+            group.add(cartridgeMesh);
+            
+            // Paddle/Stirrer (Step 1)
+            const paddleGeometry = new THREE.BoxGeometry(0.2, 0.1, 1);
+            const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9 });
+            const reactorPaddleMesh = new THREE.Mesh(paddleGeometry, paddleMaterial);
+            reactorPaddleMesh.position.set(0, 1.5, 0);
+            group.add(reactorPaddleMesh);
+            SIM_STATE.reactorPaddleMesh = reactorPaddleMesh;
+
+
+            // CO2 Collection Bag (Balloon) (Step 3)
+            const balloonGeometry = new THREE.SphereGeometry(0.1, 32, 16); // Start small
+            const balloonMaterial = new THREE.MeshPhongMaterial({
+                color: 0x10b981, 
                 transparent: true,
-                opacity: 0.9,
-                clearcoat: 1.0,
-                clearcoatRoughness: 0.1,
+                opacity: 0.0, // Start invisible
                 side: THREE.DoubleSide
             });
-            const jarMesh = new THREE.Mesh(jarGeometry, jarMaterial);
-            jarMesh.position.y = 2;
-            jarMesh.receiveShadow = true;
-            jarMesh.castShadow = true;
-            jarGroup.add(jarMesh);
-
-            // Fermentation Liquid/Slurry (Represents potato/date waste)
-            const liquidGeometry = new THREE.CylinderGeometry(1.9, 1.9, 3, 32);
-            const liquidMaterial = new THREE.MeshStandardMaterial({
-                color: 0x4b5563, // Dark grey/sludge
-                roughness: 0.8,
-                metalness: 0.1,
-                transparent: true,
-                opacity: 0.95
-            });
-            const liquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
-            liquidMesh.position.y = 1.5;
-            jarGroup.add(liquidMesh);
+            co2Balloon = new THREE.Mesh(balloonGeometry, balloonMaterial);
+            co2Balloon.position.set(0, 5.5, 2.5);
+            group.add(co2Balloon);
+            SIM_STATE.co2BalloonMesh = co2Balloon;
 
             // Sensors (Probes) - Penetrating the lid
             const sensorMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.1 });
             
-            // Temp Probe (T) 
-            const probeT = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.5, 16), sensorMaterial);
-            probeT.position.set(1.0, 2.5, 0); 
-            jarGroup.add(probeT);
+            const probeT = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 16), sensorMaterial);
+            probeT.position.set(1.0, 4.0, 0); 
+            group.add(probeT);
             
-            // Pressure/Gas Probe (P) 
-            const probeP = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4, 16), sensorMaterial);
-            probeP.position.set(-1.0, 2.8, 0.5);
-            jarGroup.add(probeP);
-            
-            // Jar Lid (Grey plastic)
-            const lidGeometry = new THREE.TorusGeometry(2, 0.1, 16, 100);
-            const lidMaterial = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
-            const lidMesh = new THREE.Mesh(lidGeometry, lidMaterial);
-            lidMesh.rotation.x = Math.PI / 2;
-            lidMesh.position.y = 4.0;
-            jarGroup.add(lidMesh);
+            const probeP = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 16), sensorMaterial);
+            probeP.position.set(-1.0, 4.2, 0);
+            group.add(probeP);
 
-            // CO2 Capture Balloon (Purple, semi-inflated)
-            const balloonGeometry = new THREE.SphereGeometry(1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-            const balloonMaterial = new THREE.MeshPhongMaterial({
-                color: 0x9333ea, // Purple balloon
-                transparent: true,
-                opacity: 0.7,
-                side: THREE.DoubleSide
-            });
-            const balloonMesh = new THREE.Mesh(balloonGeometry, balloonMaterial);
-            balloonMesh.position.y = 4.0; 
-            jarGroup.add(balloonMesh);
-            
-            // Jar position on the base
-            jarGroup.position.x = -3;
-            jarGroup.position.z = 0;
-            
-            scene.add(jarGroup);
-            return { jarGroup, probeT, probeP };
+            group.position.x = -5;
+            group.position.z = 0;
+            scene.add(group);
+            jarGroup = group;
+            return group;
         }
 
-        function createArduinoDisplay() {
-            const arduinoGroup = new THREE.Group();
+        function createPurificationTower() {
+            const group = new THREE.Group();
             
-            // Arduino/Mounting Box 
-            const housingGeometry = new THREE.BoxGeometry(3, 0.5, 4);
-            const housingMaterial = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 });
+            // Base Tower Structure
+            const towerGeometry = new THREE.BoxGeometry(2, 6, 2);
+            const towerMaterial = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
+            const towerMesh = new THREE.Mesh(towerGeometry, towerMaterial);
+            towerMesh.position.y = 3;
+            group.add(towerMesh);
+            purificationTower = group;
+
+            // Stage Lights (6.1 Pre-Filtration, 6.2 Distillation, 6.3 Sieves, 6.4 QC)
+            const lightMaterial = new THREE.MeshStandardMaterial({ color: 0x374151, emissive: 0x374151, emissiveIntensity: 0.5 });
+            
+            // 6.1: Pre-Filtration
+            const light1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), lightMaterial.clone());
+            light1.position.set(1.1, 5, 0);
+            group.add(light1);
+            purificationLights['filter'] = light1;
+
+            // 6.2: Simple Distillation
+            const light2 = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), lightMaterial.clone());
+            light2.position.set(1.1, 3.5, 0);
+            group.add(light2);
+            purificationLights['distill'] = light2;
+
+            // 6.3: Molecular Sieves
+            const light3 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), lightMaterial.clone());
+            light3.position.set(1.1, 2.0, 0);
+            group.add(light3);
+            purificationLights['sieves'] = light3;
+
+            // 6.4: Final Purity Check / Metering
+            const light4 = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), lightMaterial.clone());
+            light4.position.set(1.1, 0.5, 0);
+            group.add(light4);
+            purificationLights['qc'] = light4;
+
+            group.position.x = 0;
+            group.position.z = 0;
+            scene.add(group);
+            return group;
+        }
+
+        function createOutputUnit() {
+            const group = new THREE.Group();
+            
+            // Housing Box 
+            const housingGeometry = new THREE.BoxGeometry(4, 3, 3);
+            const housingMaterial = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5 });
             const housingMesh = new THREE.Mesh(housingGeometry, housingMaterial);
-            housingMesh.position.y = 0.5;
-            arduinoGroup.add(housingMesh);
+            housingMesh.position.y = 1.5;
+            housingMesh.castShadow = true;
+            group.add(housingMesh);
             
             // LCD Screen Display
-            const lcdTexture = createLcdTexture();
-            const displayGeometry = new THREE.PlaneGeometry(2.3, 3.3);
-            const displayMaterial = new THREE.MeshBasicMaterial({ map: lcdTexture, side: THREE.DoubleSide });
-            const displayMesh = new THREE.Mesh(displayGeometry, displayMaterial);
-            displayMesh.rotation.x = -Math.PI / 2;
-            displayMesh.position.set(0, 0.77, 0);
-            arduinoGroup.add(displayMesh);
+            lcdTexture = createLcdTexture(SIM_STATE);
+            const displayGeometry = new THREE.PlaneGeometry(3.5, 2.5);
+            SIM_STATE.lcdMaterial = new THREE.MeshBasicMaterial({ map: lcdTexture, side: THREE.DoubleSide });
+            const displayMesh = new THREE.Mesh(displayGeometry, SIM_STATE.lcdMaterial);
+            displayMesh.position.set(-0.75, 1.5, 1.51);
+            group.add(displayMesh);
 
-            // Arduino position on the base
-            arduinoGroup.position.x = 1.5;
-            arduinoGroup.position.z = 0;
-            
-            scene.add(arduinoGroup);
-            return arduinoGroup;
-        }
+            // Fan/LED Output (Visual Energy)
+            const ledGeometry = new THREE.BoxGeometry(1, 1, 0.1);
+            const ledMaterial = new THREE.MeshPhongMaterial({ color: 0xfcd34d, emissive: 0xfcd34d, emissiveIntensity: 0 }); // Initial Intensity 0
+            SIM_STATE.ledMesh = new THREE.Mesh(ledGeometry, ledMaterial);
+            SIM_STATE.ledMesh.position.set(1.5, 1.5, 1.51);
+            group.add(SIM_STATE.ledMesh);
 
-        function createGeneratorBox() {
-            const generatorGroup = new THREE.Group();
-            
-            // Generator Box (Black Box)
-            const boxGeometry = new THREE.BoxGeometry(3, 3, 3);
-            const boxMaterial = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5, metalness: 0.1 });
-            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-            boxMesh.position.y = 1.5;
-            boxMesh.castShadow = true;
-            generatorGroup.add(boxMesh);
+            // Simple fan propeller for mechanical energy
+            const propGeometry = new THREE.BoxGeometry(1.5, 0.1, 0.1);
+            propGeometry.merge(new THREE.BoxGeometry(0.1, 1.5, 0.1), new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+            const propMaterial = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.1 });
+            SIM_STATE.generatorFanMesh = new THREE.Mesh(propGeometry, propMaterial); // Correctly named
+            SIM_STATE.generatorFanMesh.position.set(1.5, 1.5, 1.6);
+            SIM_STATE.generatorFanMesh.visible = false;
+            group.add(SIM_STATE.generatorFanMesh);
 
-            // Generator Label (Textured Front)
-            const labelTexture = createLabelTexture('BIOETHANOL GENERATOR', 512, 512, '#ffffff', '#0f172a');
-            const labelGeometry = new THREE.PlaneGeometry(2.8, 2.8);
-            const labelMaterial = new THREE.MeshStandardMaterial({ map: labelTexture, side: THREE.FrontSide });
-            const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-            labelMesh.position.set(0, 1.5, 1.51);
-            generatorGroup.add(labelMesh);
+            // Fuel Holder/Vial Slot
+            const holderGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 32);
+            const holderMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.7 });
+            const holderMesh = new THREE.Mesh(holderGeometry, holderMaterial);
+            holderMesh.position.set(0, 0.25, -1.5);
+            group.add(holderMesh);
 
-
-            // Simulated LED/Fan Output (Emissive Light Source)
-            const ledGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32);
-            const ledMaterial = new THREE.MeshPhongMaterial({ color: 0xfcd34d, emissive: 0xfcd34d, emissiveIntensity: 2 }); // Bright glow
-            const ledMesh = new THREE.Mesh(ledGeometry, ledMaterial);
-            ledMesh.rotation.x = Math.PI / 2;
-            ledMesh.position.set(0, 1.5, 1.51);
-            generatorGroup.add(ledMesh);
-
-            // Red Toggle Switch
-            const switchGeometry = new THREE.BoxGeometry(0.5, 0.3, 0.2);
-            const switchMaterial = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5 });
-            const switchMesh = new THREE.Mesh(switchGeometry, switchMaterial);
-            switchMesh.position.set(0, 0.5, 1.51);
-            generatorGroup.add(switchMesh);
-            
-            // Generator position on the base
-            generatorGroup.position.x = 5.5;
-            generatorGroup.position.z = 0;
-            
-            scene.add(generatorGroup);
-            return generatorGroup;
-        }
-
-        function createPlatform() {
-            const platformGeometry = new THREE.BoxGeometry(12, 0.4, 6);
-            const platformMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4, metalness: 0.1 });
-            const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
-            platformMesh.position.y = -0.2;
-            platformMesh.receiveShadow = true;
-            scene.add(platformMesh);
+            group.position.x = 7;
+            group.position.z = 0;
+            scene.add(group);
+            return group;
         }
 
         // Creates the final output vial
@@ -324,73 +448,234 @@
             // Ethanol Liquid (Amber Color)
             const ethanolGeometry = new THREE.CylinderGeometry(0.45, 0.45, 1.5, 32);
             const ethanolMaterial = new THREE.MeshStandardMaterial({ color: 0xfb923c, roughness: 0.5 }); // Amber
-            const ethanolMesh = new THREE.Mesh(ethanolGeometry, ethanolMaterial);
-            ethanolMesh.position.y = 0.75;
-            vialGroup.add(ethanolMesh);
+            ethanolLiquid = new THREE.Mesh(ethanolGeometry, ethanolMaterial);
+            ethanolLiquid.position.y = 0.75;
+            ethanolLiquid.visible = false; // Initially hidden until step 5/7
+            vialGroup.add(ethanolLiquid);
 
-            // Vial Label (Bioethanol Output)
-            const labelTexture = createVialLabelTexture();
-            const labelMaterial = new THREE.MeshStandardMaterial({ map: labelTexture, transparent: true, opacity: 0.9 });
-            const labelGeometry = new THREE.CylinderGeometry(0.51, 0.51, 1.5, 32, 1, true); 
-            const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-            labelMesh.position.y = 0.75;
-            vialGroup.add(labelMesh);
-            
             vialGroup.position.copy(position);
             scene.add(vialGroup);
+            return vialGroup;
         }
         
-        // Function to create connecting wires
-        function createWire(startPos, endPos, color) {
+        // Function to create connecting pipes (thicker than wires)
+        function createPipe(startPos, endPos, color) {
             const curve = new THREE.CatmullRomCurve3([
                 startPos,
                 new THREE.Vector3(startPos.x, startPos.y + 1, startPos.z), 
-                new THREE.Vector3(endPos.x, endPos.y + 0.5, endPos.z),
+                new THREE.Vector3(endPos.x, endPos.y + 1, endPos.z),
                 endPos
             ]);
-            const geometry = new THREE.TubeGeometry(curve, 20, 0.08, 6, false);
-            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
+            const geometry = new THREE.TubeGeometry(curve, 30, 0.15, 8, false);
+            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, metalness: 0.3 });
             const mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
+            return { mesh, curve };
         }
 
         function buildModel() {
             createPlatform();
-            const { jarGroup, probeT, probeP } = createJar();
-            const arduinoGroup = createArduinoDisplay();
-            const generatorGroup = createGeneratorBox();
-            
-            // Position the Bioethanol Vial
-            createVial(new THREE.Vector3(generatorGroup.position.x - 2, 0, 1.5));
+            const reactor = createFermentationReactor();
+            const tower = createPurificationTower();
+            const outputUnit = createOutputUnit();
+            const vial = createVial(new THREE.Vector3(outputUnit.position.x, 0, -1.5)); // Vial next to the output unit
 
-            // --- WIRING --- (Connecting the system elements)
+            // --- PIPING/FLOW --- 
             
-            // 1. Temp Sensor (T) to Arduino (Orange)
-            const tStart = new THREE.Vector3(probeT.position.x + jarGroup.position.x, probeT.position.y + jarGroup.position.y, probeT.position.z + jarGroup.position.z);
-            const tEnd = new THREE.Vector3(arduinoGroup.position.x - 1, arduinoGroup.position.y + 0.5, arduinoGroup.position.z + 1.8);
-            createWire(tStart, tEnd, 0xfb923c); // Orange wire
+            // 1. Fermentation (Reactor) to Purification Tower (Crude Ethanol) (Yellow)
+            const separationStart = new THREE.Vector3(reactor.position.x + 2.5, reactor.position.y + 0.5, reactor.position.z);
+            const separationEnd = new THREE.Vector3(tower.position.x - 1, tower.position.y + 5.5, tower.position.z);
+            const crudePipe = createPipe(separationStart, separationEnd, 0xfcd34d); // Crude Ethanol (Yellow)
 
-            // 2. Pressure/Gas Sensor (P) to Arduino (Blue)
-            const pStart = new THREE.Vector3(probeP.position.x + jarGroup.position.x, probeP.position.y + jarGroup.position.y, probeP.position.z + jarGroup.position.z);
-            const pEnd = new THREE.Vector3(arduinoGroup.position.x + 1, arduinoGroup.position.y + 0.5, arduinoGroup.position.z + 1.8);
-            createWire(pStart, pEnd, 0x3b82f6); // Blue wire
+            // 2. Purification Tower to Output Unit (Final Fuel) (Green)
+            const finalStart = new THREE.Vector3(tower.position.x + 1.5, tower.position.y - 2.5, tower.position.z);
+            const finalEnd = new THREE.Vector3(outputUnit.position.x - 2, outputUnit.position.y + 0.5, outputUnit.position.z);
+            const finalPipe = createPipe(finalStart, finalEnd, 0x10b981); // Final Fuel (Green)
+
+            // --- ADD LABELS (Positions adjusted for clarity) ---
             
-            // 3. Arduino to Generator (Activation Logic) (Red)
-            const activationStart = new THREE.Vector3(arduinoGroup.position.x, arduinoGroup.position.y + 0.5, arduinoGroup.position.z - 1.8);
-            const activationEnd = new THREE.Vector3(generatorGroup.position.x, generatorGroup.position.y + 2.5, generatorGroup.position.z + 1.5);
-            createWire(activationStart, activationEnd, 0xdc2626); // Red wire
+            // Major Components
+            // Reactor: Moved label higher and slightly forward
+            createLabel("1. Feedstock & Fermentation Reactor", reactor.position, new THREE.Vector3(0, 5.0, 3.5));
+            // Tower: Moved label higher and further back
+            createLabel("2. Purification Tower (Distillation/Sieves)", tower.position, new THREE.Vector3(0, 7.5, -1));
+            // Output Unit: Moved label higher
+            createLabel("3. Control & Energy Output Unit", outputUnit.position, new THREE.Vector3(0, 4.0, 3.5));
+            
+            // Fuel Vial
+            createLabel("Fuel Collection Vial", new THREE.Vector3(outputUnit.position.x, 0, -1.5), new THREE.Vector3(0, 3.0, 0));
+            
+            // Internal/Flow Labels
+            // CO2 Balloon: Moved label offset slightly
+            createLabel("CO2 Collection (Fermentation Byproduct)", SIM_STATE.co2BalloonMesh.position, new THREE.Vector3(-2.5, 1.0, 0));
+            // Slurry: Moved label outside the reactor
+            createLabel("Raw Feedstock & Slurry", new THREE.Vector3(jarGroup.position.x, 1, 0), new THREE.Vector3(0, 4.5, -3));
+
+            // Pipe Labels
+            const crudePipeLabelPos = crudePipe.curve.getPoint(0.4);
+            createLabel("Crude Ethanol Flow (Yellow)", crudePipeLabelPos, new THREE.Vector3(0, 2.5, 0));
+            
+            const finalPipeLabelPos = finalPipe.curve.getPoint(0.5);
+            createLabel("Final Purified Fuel Flow (Green)", finalPipeLabelPos, new THREE.Vector3(0, 2.5, 0));
+
+            // LCD Panel
+            createLabel("LCD Status Panel", new THREE.Vector3(outputUnit.position.x - 0.75, 1.5, 1.51), new THREE.Vector3(1.5, 1.5, 0));
+        }
+
+        // --- SIMULATION & STAGE HANDLER ---
+        function update3DVisuals(stage) {
+            const data = STAGES[stage];
+            SIM_STATE.purity = data.purity;
+            SIM_STATE.co2Pressure = data.co2;
+            
+            // Reset Lights/Effects
+            Object.values(purificationLights).forEach(l => l.material.emissiveIntensity = 0.5);
+            SIM_STATE.ledMesh.material.emissiveIntensity = 0;
+            generatorLight.intensity = 0;
+            
+            // Ensure both fan meshes are initially hidden/reset
+            if (SIM_STATE.reactorPaddleMesh) SIM_STATE.reactorPaddleMesh.visible = false;
+            if (SIM_STATE.generatorFanMesh) SIM_STATE.generatorFanMesh.visible = false;
+            SIM_STATE.generatorActive = false;
+
+
+            // Handle Stage-Specific Visuals
+            switch (stage) {
+                case 1: 
+                    // Paddle turns for mechanical processing
+                    if (SIM_STATE.reactorPaddleMesh) {
+                        SIM_STATE.reactorPaddleMesh.rotationSpeed = 5; // Fast rotation for paddle
+                        SIM_STATE.reactorPaddleMesh.visible = true;
+                    }
+                    // Reset to initial state
+                    SIM_STATE.co2BalloonMesh.scale.set(0.1, 0.1, 0.1); 
+                    SIM_STATE.co2BalloonMesh.material.opacity = 0.0;
+                    SIM_STATE.liquidMesh.position.y = 1; // Liquid high
+                    SIM_STATE.liquidMesh.scale.y = 1;
+                    ethanolLiquid.visible = false;
+                    break;
+                case 2:
+                    // Stop paddle, feedstock ready for biology
+                    if (SIM_STATE.reactorPaddleMesh) {
+                        SIM_STATE.reactorPaddleMesh.rotationSpeed = 0;
+                        SIM_STATE.reactorPaddleMesh.visible = false;
+                    }
+                    break;
+                case 3:
+                    // CO2 production starts (Balloon inflates)
+                    SIM_STATE.co2BalloonMesh.scale.set(1.5, 1.5, 1.5);
+                    SIM_STATE.co2BalloonMesh.material.opacity = 0.7;
+                    break;
+                case 4:
+                    // Fermentation plateau
+                    break;
+                case 5:
+                    // Solid-Liquid Separation: Liquid level drops (crude ethanol is extracted)
+                    SIM_STATE.liquidMesh.position.y = 0.5; // Represents spent mash remaining
+                    SIM_STATE.liquidMesh.scale.y = 0.5; 
+                    // Show crude ethanol in the vial
+                    ethanolLiquid.visible = true;
+                    break;
+                case 6:
+                    // Purification Tower stages activate sequentially
+                    // Stage 6.1: Pre-Filtration (Blue light)
+                    purificationLights['filter'].material.emissive.setHex(0x3b82f6);
+                    purificationLights['filter'].material.emissiveIntensity = 2;
+                    // Stage 6.2: Distillation (Red light) - Max Purity (95.6%)
+                    purificationLights['distill'].material.emissive.setHex(0xfb923c);
+                    purificationLights['distill'].material.emissiveIntensity = 3;
+                    // Stage 6.3: Molecular Sieves (Green light)
+                    purificationLights['sieves'].material.emissive.setHex(0x10b981);
+                    purificationLights['sieves'].material.emissiveIntensity = 2;
+                    // Stage 6.4: Final Purity Check (Yellow light)
+                    purificationLights['qc'].material.emissive.setHex(0xfcd34d);
+                    purificationLights['qc'].material.emissiveIntensity = 4;
+                    break;
+                case 7:
+                    // Energy Output Simulation
+                    SIM_STATE.generatorActive = true;
+                    generatorLight.intensity = 5; // Turn on spotlight
+                    SIM_STATE.ledMesh.material.emissiveIntensity = 4; // Turn on LED strip
+                    if (SIM_STATE.generatorFanMesh) {
+                        SIM_STATE.generatorFanMesh.rotationSpeed = 10; // Fan spins fast
+                        SIM_STATE.generatorFanMesh.visible = true;
+                    }
+                    break;
+                case 8:
+                    // Final state, everything stable, generator running
+                    SIM_STATE.generatorActive = true;
+                    generatorLight.intensity = 5; 
+                    SIM_STATE.ledMesh.material.emissiveIntensity = 4; 
+                    if (SIM_STATE.generatorFanMesh) {
+                        SIM_STATE.generatorFanMesh.rotationSpeed = 10; 
+                        SIM_STATE.generatorFanMesh.visible = true;
+                    }
+                    break;
+            }
+
+            // Update LCD
+            if (SIM_STATE.lcdMaterial) {
+                SIM_STATE.lcdMaterial.map = createLcdTexture(SIM_STATE);
+                SIM_STATE.lcdMaterial.map.needsUpdate = true;
+            }
+        }
+
+        function updateControlPanel() {
+            const stage = SIM_STATE.stage;
+            const data = STAGES[stage];
+
+            document.getElementById('current-stage-display').textContent = `STAGE ${stage}: ${data.name}`;
+            document.getElementById('stage-description').textContent = data.desc;
+            document.getElementById('status-purity').textContent = `${SIM_STATE.purity.toFixed(1)}%`;
+            document.getElementById('status-co2').textContent = `${SIM_STATE.co2Pressure.toFixed(1)} kPa`;
+            document.getElementById('status-generator').textContent = SIM_STATE.generatorActive ? 'ON' : 'OFF';
+            document.getElementById('status-generator').className = SIM_STATE.generatorActive ? 'text-green-400' : 'text-red-400';
+
+            const nextButton = document.getElementById('next-stage-button');
+            if (stage < SIM_STATE.maxStages) {
+                nextButton.textContent = `Next Stage (${stage + 1}/${SIM_STATE.maxStages})`;
+                nextButton.disabled = false;
+            } else {
+                nextButton.textContent = 'Simulation Complete';
+                nextButton.disabled = true;
+            }
+        }
+
+        function handleNextStage() {
+            if (SIM_STATE.stage < SIM_STATE.maxStages) {
+                SIM_STATE.stage++;
+                update3DVisuals(SIM_STATE.stage);
+                updateControlPanel();
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('next-stage-button').addEventListener('click', handleNextStage);
         }
 
         // --- Animation Loop ---
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
+
+            // Rotate the reactor paddle (Stage 1)
+            if (SIM_STATE.reactorPaddleMesh && SIM_STATE.reactorPaddleMesh.visible) {
+                SIM_STATE.reactorPaddleMesh.rotation.z += SIM_STATE.reactorPaddleMesh.rotationSpeed * 0.05 || 0.0;
+            }
+
+            // Rotate the generator fan (Stages 7/8)
+            if (SIM_STATE.generatorFanMesh && SIM_STATE.generatorFanMesh.visible) {
+                SIM_STATE.generatorFanMesh.rotation.z += SIM_STATE.generatorFanMesh.rotationSpeed * 0.05 || 0.0;
+                SIM_STATE.generatorFanMesh.rotation.x += SIM_STATE.generatorFanMesh.rotationSpeed * 0.05 || 0.0;
+            }
+
             renderer.render(scene, camera);
         }
 
         // --- Resize Handler ---
         function onWindowResize() {
-            const newWidth = window.innerWidth;
+            const controlPanelWidth = document.getElementById('control-panel').offsetWidth;
+            const newWidth = window.innerWidth - controlPanelWidth;
             const newHeight = window.innerHeight;
             camera.aspect = newWidth / newHeight;
             camera.updateProjectionMatrix();
@@ -400,6 +685,7 @@
         // Start the application
         window.onload = function () {
             init();
+            update3DVisuals(SIM_STATE.stage); // Initial visual state
             animate();
         };
 
