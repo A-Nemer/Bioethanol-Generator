@@ -95,25 +95,24 @@
         </div>
     </div>
 
-    <div id="controls-hint">Use mouse/touch to rotate (left click) and zoom (scroll/pinch).</div>
+    <div id="controls-hint">Use mouse/touch to rotate (left click) and zoom (scroll/pinch). Click the yellow drawer to remove/insert it.</div>
 
     <script>
         // Global variables for Three.js and Simulation State
         let scene, camera, renderer, controls, heatSourceLight;
         let blenderTank, filtrationTank; 
         let distillationVaporPath = null;
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
 
-        // --- NEW CONSTANTS FOR ELEVATION AND REPOSITIONING ---
-        const BLENDER_TANK_ELEVATION = 1.0; 
+        // --- UPDATED CONSTANTS FOR ELEVATION AND REPOSITIONING ---
+        // Increased elevation for gravity feed to Filtration Tank
+        const BLENDER_TANK_ELEVATION = 3.0; 
         const COLLECTION_BOX_HEIGHT = 2.5; 
-        // Collection Box repositioned under the condenser coil exit (at X=6.5)
-        const COLLECTION_BOX_POSITION = new THREE.Vector3(6.5, COLLECTION_BOX_HEIGHT / 2, 0.0); // Center Y=1.25
-        const COLLECTION_LIQUID_HEIGHT = COLLECTION_BOX_HEIGHT - 0.2; // Max liquid fill: 2.3
-        const COLLECTION_LIQUID_BASE_Y = 0.0; // The base of the liquid mesh will sit at Y=0 (on the platform)
-
-        // Filtration Tank Constants (Shorter and Flatter, unchanged from previous step)
+        const COLLECTION_BOX_POSITION = new THREE.Vector3(6.5, COLLECTION_BOX_HEIGHT / 2, 0.0); 
+        const COLLECTION_LIQUID_HEIGHT = COLLECTION_BOX_HEIGHT - 0.2; 
+        const COLLECTION_LIQUID_BASE_Y = 0.0; 
         const FILTRATION_TANK_HEIGHT = 1.5;
-        const FILTRATION_LIQUID_MAX_HEIGHT = FILTRATION_TANK_HEIGHT - 0.1; // 1.4 units max fill
 
         // --- SIMULATION STATE ---
         const SIM_STATE = {
@@ -126,9 +125,11 @@
             // 3D Model References
             blenderContentMesh: null,
             filtrationLiquidMesh: null,
-            collectionContentMesh: null, // Now transparent box liquid fill
+            collectionContentMesh: null, 
             blenderPropeller: null,
             heatSourceFlame: null,
+            solidsDrawer: null, 
+            isDrawerOpen: false, 
         };
 
         // --- STAGE DEFINITIONS (Matched to sketch flow) ---
@@ -178,18 +179,22 @@
             scene.add(sprite);
         }
         
-        // Function to create a pipe with smooth curves
-        function createPipe(startPos, endPos, color) {
-            // Adds an intermediate point above the max height for an arc
-            const curve = new THREE.CatmullRomCurve3([
-                startPos,
-                new THREE.Vector3((startPos.x + endPos.x) / 2, Math.max(startPos.y, endPos.y) + 1.0, (startPos.z + endPos.z) / 2),
-                endPos
-            ]);
-            const geometry = new THREE.TubeGeometry(curve, 64, 0.1, 8, false);
+        /**
+         * Creates a pipe mesh from a series of straight line segments.
+         * @param {THREE.Vector3[]} points - Array of points defining the path.
+         * @param {number} color - Pipe color.
+         * @returns {THREE.Mesh} The pipe mesh.
+         */
+        function createPipePath(points, color) {
+            const path = new THREE.CurvePath();
+            for (let i = 0; i < points.length - 1; i++) {
+                path.add(new THREE.LineCurve3(points[i], points[i + 1]));
+            }
+            // Use a higher tubular segment count for smoother connections
+            const geometry = new THREE.TubeGeometry(path, 128, 0.1, 8, false); 
             const material = new THREE.MeshStandardMaterial({ color: color, metalness: 0.8, roughness: 0.1 });
             const mesh = new THREE.Mesh(geometry, material);
-            scene.add(mesh); // Added to scene globally
+            scene.add(mesh);
             return mesh;
         }
 
@@ -201,7 +206,7 @@
 
             // Camera Setup
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 12); 
+            camera.position.set(0, 7, 12); // Moved camera up slightly
             
             // Renderer Setup
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -252,15 +257,15 @@
         function createBlenderTank() {
             const group = new THREE.Group();
             
-            const TANK_ELEVATION = BLENDER_TANK_ELEVATION; // 1.0
+            const TANK_ELEVATION = BLENDER_TANK_ELEVATION; // NEW: 3.0
             const TANK_HEIGHT = 2.5; 
-            const TANK_CENTER_Y = TANK_ELEVATION + (TANK_HEIGHT / 2); // 2.25
+            const TANK_CENTER_Y = TANK_ELEVATION + (TANK_HEIGHT / 2); // 4.25
 
-            // NEW: Support Stand (Box under the cylinder)
-            const standGeo = new THREE.BoxGeometry(3.0, TANK_ELEVATION, 3.0); // Height is TANK_ELEVATION (1.0)
+            // Support Stand (Box under the cylinder)
+            const standGeo = new THREE.BoxGeometry(3.0, TANK_ELEVATION, 3.0); // Height is TANK_ELEVATION (3.0)
             const standMaterial = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 });
             const standMesh = new THREE.Mesh(standGeo, standMaterial);
-            standMesh.position.y = TANK_ELEVATION / 2; // Center at 0.5
+            standMesh.position.y = TANK_ELEVATION / 2; // Center at 1.5
             standMesh.castShadow = true;
             group.add(standMesh);
             
@@ -268,7 +273,7 @@
             const bodyGeometry = new THREE.CylinderGeometry(2.0, 2.0, TANK_HEIGHT, 32); 
             const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
             const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            bodyMesh.position.y = TANK_CENTER_Y; // Center at 2.25
+            bodyMesh.position.y = TANK_CENTER_Y; // Center at 4.25
             group.add(bodyMesh);
 
             // Tank Contents (Slurry)
@@ -293,11 +298,11 @@
             propellerGroup.add(prop2);
             group.add(propellerGroup);
 
-            // NEW: Outlet Door at the bottom of the elevated tank
+            // Outlet Door at the bottom of the elevated tank
             const doorGeo = new THREE.BoxGeometry(0.3, 0.5, 0.1);
             const doorMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
             const doorMesh = new THREE.Mesh(doorGeo, doorMaterial);
-            // Positioned at the right edge (2.0) of the cylinder, centered at Y=1.25 (1.0 + 0.25)
+            // Positioned at the right edge (2.0) of the cylinder, centered at Y=3.25 (3.0 + 0.25)
             doorMesh.position.set(2.0, TANK_ELEVATION + 0.25, 0.0); 
             group.add(doorMesh);
 
@@ -316,7 +321,12 @@
             const TANK_HEIGHT = FILTRATION_TANK_HEIGHT; // 1.5
             const TANK_CENTER_Y = TANK_HEIGHT / 2; // 0.75
             const TANK_TOP_Y = TANK_HEIGHT; // 1.5
-            const LIQUID_HEIGHT_REF = FILTRATION_LIQUID_MAX_HEIGHT; // 1.4
+            
+            // Define liquid metrics relative to the drawer
+            const DRAWER_HEIGHT = 0.2;
+            const DRAWER_Y_POS = 0.5; // Center Y of the drawer (0.4 to 0.6)
+            const LIQUID_BASE_Y = DRAWER_Y_POS + (DRAWER_HEIGHT / 2); // 0.6 (where liquid rests)
+            const NEW_LIQUID_MAX_HEIGHT = TANK_HEIGHT - LIQUID_BASE_Y - 0.1; // 1.5 - 0.6 - 0.1 = 0.8 max height
 
             // Lower Filtration Tank Housing (Square 2)
             const housingGeometry = new THREE.BoxGeometry(3, TANK_HEIGHT, 3); 
@@ -325,33 +335,58 @@
             housingMesh.position.y = TANK_CENTER_Y; 
             group.add(housingMesh);
 
-            // Filtration drawer (Sits on top of the box)
-            const drawerGeometry = new THREE.BoxGeometry(2.8, 0.3, 2.8);
-            const drawerMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.9 });
-            const drawerMesh = new THREE.Mesh(drawerGeometry, drawerMaterial);
-            drawerMesh.position.set(0, TANK_TOP_Y + (0.3/2), 0); 
-            group.add(drawerMesh);
+            // Filtration top frame/lid
+            const topFrameGeometry = new THREE.BoxGeometry(2.8, 0.3, 2.8);
+            const topFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.9 });
+            const topFrameMesh = new THREE.Mesh(topFrameGeometry, topFrameMaterial);
+            topFrameMesh.position.set(0, TANK_TOP_Y + (0.3/2), 0); 
+            group.add(topFrameMesh);
+
+            // --- Solids Collector Drawer (The removable part) ---
+            const drawerGeometry = new THREE.BoxGeometry(2.8, DRAWER_HEIGHT, 2.8);
+            const drawerMaterial = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.8, metalness: 0.2 }); // Distinct Yellow/Gold
+            SIM_STATE.solidsDrawer = new THREE.Mesh(drawerGeometry, drawerMaterial);
             
-            // Liquid Level (Fermentate)
-            const liquidGeometry = new THREE.BoxGeometry(2.8, LIQUID_HEIGHT_REF, 2.8);
+            // Store the initial position for easy reset
+            SIM_STATE.solidsDrawer.userData.initialPosition = new THREE.Vector3(0, DRAWER_Y_POS, 0); 
+            SIM_STATE.solidsDrawer.position.copy(SIM_STATE.solidsDrawer.userData.initialPosition);
+            SIM_STATE.solidsDrawer.name = 'SolidsDrawer'; // For raycasting interaction
+            SIM_STATE.solidsDrawer.castShadow = true;
+            group.add(SIM_STATE.solidsDrawer);
+
+
+            // Liquid Level (Fermentate) - sits above the drawer
+            const liquidGeometry = new THREE.BoxGeometry(2.8, NEW_LIQUID_MAX_HEIGHT, 2.8);
             const liquidMaterial = new THREE.MeshStandardMaterial({ color: 0x22c55e, transparent: true, opacity: 0.7 }); 
             SIM_STATE.filtrationLiquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
             
-            SIM_STATE.filtrationLiquidMesh.position.set(0, LIQUID_HEIGHT_REF / 2, 0); 
+            // Liquid mesh centered based on its new base and height
+            SIM_STATE.filtrationLiquidMesh.position.set(0, LIQUID_BASE_Y + (NEW_LIQUID_MAX_HEIGHT / 2), 0); 
             SIM_STATE.filtrationLiquidMesh.scale.y = 0.001; // Start empty
+            
+            // Store scaling metrics for update3DVisuals
+            SIM_STATE.filtrationLiquidMesh.userData.liquidBaseY = LIQUID_BASE_Y;
+            SIM_STATE.filtrationLiquidMesh.userData.maxHeight = NEW_LIQUID_MAX_HEIGHT;
+
             group.add(SIM_STATE.filtrationLiquidMesh);
             
-            // --- Inlet from Blender Tank (NOW FROM THE BOTTOM OF THE ELEVATED TANK) ---
+            // --- NEW PIPE: Inlet from Blender Tank (GRAVITY FEED) ---
             const blenderPos = new THREE.Vector3(-6.0, 0, 0); // Blender group position
             const filterPos = new THREE.Vector3(-1.5, 0, 0); // Filtration group position
             
-            // Start: Bottom outlet of Blender Tank (x=-4.0, y=1.25, z=0.0) 
+            // Start: Bottom outlet of Blender Tank (x=-4.0, y=3.25, z=0.0) 
             const inletPipeStart = new THREE.Vector3(blenderPos.x + 2.0, BLENDER_TANK_ELEVATION + 0.25, blenderPos.z); 
             // End: Top center of Filtration Tank (y=1.5)
             const inletPipeEnd = new THREE.Vector3(filterPos.x, filterPos.y + TANK_TOP_Y, filterPos.z);
             
-            // This pipe should be angled to go up and over the filter bed's top
-            createPipe(inletPipeStart, inletPipeEnd, 0xaaaaaa);
+            // Define points for a clean L-bend, ensuring flow is downhill (3.25 -> 1.5)
+            const gravityPipePoints = [
+                inletPipeStart,                                         // 1. Start: (-4.0, 3.25, 0.0)
+                new THREE.Vector3(filterPos.x, inletPipeStart.y, 0.0), // 2. Horizontal: (-1.5, 3.25, 0.0)
+                inletPipeEnd                                            // 3. Drop: (-1.5, 1.5, 0.0)
+            ];
+            
+            createPipePath(gravityPipePoints, 0xaaaaaa);
             
             // Automated Door (Outlet for the pipe leading to distillation)
             const doorGeo = new THREE.BoxGeometry(0.3, 0.5, 0.1);
@@ -402,32 +437,31 @@
             group.add(SIM_STATE.heatSourceFlame);
             createLabel("Heat Source", heatPosition, new THREE.Vector3(0, 1.0, 0));
 
-            // --- 3. Pipe (Inlet from Filtration Tank) ---
+            // --- 3. NEW PIPE: Inlet from Filtration Tank (ZIGZAG PUMPED FEED) ---
             const filtrationGroupPos = new THREE.Vector3(-1.5, 0, 0); 
             
-            // Start: Outlet on Filtration Tank (Absolute: -1.5 (group) + 1.5 (door offset) = 0.0, Y=0.5)
-            const inletPipeStart = new THREE.Vector3(
-                filtrationGroupPos.x + 1.5, 
-                filtrationGroupPos.y + 0.5, 
-                filtrationGroupPos.z
-            ); // Absolute (0.0, 0.5, 0.0)
-
-            // End: Inlet on Distillation Flask (Absolute: 4.0 - 0.5 = 3.5, Y=1.5)
-            const flaskInletPos = new THREE.Vector3(
-                flaskPosition.x - 0.5, 
-                flaskPosition.y - 1.0, 
-                flaskPosition.z
-            ); 
+            // Start: Outlet on Filtration Tank (Absolute: 0.0, Y=0.5)
+            const inletPipeStart = new THREE.Vector3(filtrationGroupPos.x + 1.5, filtrationGroupPos.y + 0.5, filtrationGroupPos.z); 
             
-            // The pipe uses the absolute coordinates of the Filtration Tank outlet and the Distillation Flask inlet
-            createPipe(inletPipeStart, flaskInletPos, 0xaaaaaa);
+            // End: Inlet on Distillation Flask (Absolute: 3.5, Y=1.5)
+            const flaskInletPos = new THREE.Vector3(flaskPosition.x - 0.5, flaskPosition.y - 1.0, flaskPosition.z); 
+            
+            // Define points for the efficient zigzag path (Straight-Up-Straight)
+            const pumpedPipePoints = [
+                inletPipeStart,                                         // 1. Start: (0.0, 0.5, 0.0)
+                new THREE.Vector3(flaskInletPos.x - 0.5, inletPipeStart.y, 0.0), // 2. Horizontal: (3.0, 0.5, 0.0)
+                new THREE.Vector3(flaskInletPos.x - 0.5, flaskInletPos.y, 0.0),  // 3. Vertical Up: (3.0, 1.5, 0.0)
+                flaskInletPos                                           // 4. Straight In: (3.5, 1.5, 0.0)
+            ];
+
+            createPipePath(pumpedPipePoints, 0xaaaaaa);
             
             
             // --- 4. Condenser Coil & Vapor Path (Up then Right) ---
-            const condenserCenter = new THREE.Vector3(6.5, 3.5, 0.0); // Adjusted to align with new collector position
+            const condenserCenter = new THREE.Vector3(6.5, 3.5, 0.0); 
             const vaporStart = new THREE.Vector3(flaskPosition.x, flaskPosition.y + 1.0, flaskPosition.z); // Top of Distillation Flask
 
-            // Curve defining the coil path
+            // The vapor path remains curved as it represents a cooling coil
             const coilPath = new THREE.CatmullRomCurve3([
                 vaporStart,
                 new THREE.Vector3(vaporStart.x + 1.0, vaporStart.y + 1.0, vaporStart.z),
@@ -447,10 +481,7 @@
             group.add(distillationVaporPath);
 
 
-            // --- 5. Collection Drip Location (The purified liquid drips directly from the coil exit) ---
-            const dripStart = new THREE.Vector3(condenserCenter.x, 2.5, 0.0);
-            
-            // --- 6. Transparent Collection Unit with Water ---
+            // --- 5. Transparent Collection Unit with Liquid ---
             
             // Transparent Box (Collection Unit)
             const boxGeo = new THREE.BoxGeometry(2.5, COLLECTION_BOX_HEIGHT, 1.5);
@@ -458,18 +489,16 @@
                 color: 0xffffff, transmission: 0.9, transparent: true, opacity: 0.4, roughness: 0.1, metalness: 0
             });
             const boxMesh = new THREE.Mesh(boxGeo, boxMaterial);
-            boxMesh.position.copy(COLLECTION_BOX_POSITION); // Now centered under dripStart X
+            boxMesh.position.copy(COLLECTION_BOX_POSITION); 
             group.add(boxMesh);
             createLabel("Purified Liquid Collector", COLLECTION_BOX_POSITION, new THREE.Vector3(0, 1.6, 0));
             
             // Collected Liquid (Water blue color)
-            const liquidGeometry = new THREE.BoxGeometry(2.3, COLLECTION_LIQUID_HEIGHT, 1.3); // Max fill height 2.3
+            const liquidGeometry = new THREE.BoxGeometry(2.3, COLLECTION_LIQUID_HEIGHT, 1.3); 
             const liquidMaterial = new THREE.MeshStandardMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.8 });
             SIM_STATE.collectionContentMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
             
-            // Initial scale is near zero, position will be set dynamically in update3DVisuals
             SIM_STATE.collectionContentMesh.scale.y = 0.001;
-            // Positioned based on COLLECTION_LIQUID_BASE_Y (0.0)
             SIM_STATE.collectionContentMesh.position.set(COLLECTION_BOX_POSITION.x, COLLECTION_LIQUID_HEIGHT / 2, COLLECTION_BOX_POSITION.z);
 
             group.add(SIM_STATE.collectionContentMesh);
@@ -483,6 +512,36 @@
             createBlenderTank();
             createFiltrationBed();
             createDistillationSetup();
+        }
+
+        // --- INTERACTION HANDLERS ---
+        function onMouseClick(event) {
+            // Calculate mouse position in normalized device coordinates (-1 to +1)
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Check only against the drawer mesh
+            const intersects = raycaster.intersectObject(SIM_STATE.solidsDrawer, true);
+
+            if (intersects.length > 0 && intersects[0].object.name === 'SolidsDrawer') {
+                toggleSolidsDrawer();
+            }
+        }
+        
+        function toggleSolidsDrawer() {
+            const drawer = SIM_STATE.solidsDrawer;
+            if (!drawer) return;
+
+            SIM_STATE.isDrawerOpen = !SIM_STATE.isDrawerOpen;
+
+            // Target position: Pull out 2 units along the Z axis (to the front)
+            const targetZ = SIM_STATE.isDrawerOpen ? drawer.userData.initialPosition.z + 2.0 : drawer.userData.initialPosition.z;
+
+            // Instantly update position on interaction
+            drawer.position.z = targetZ; 
         }
 
         // --- SIMULATION & STAGE HANDLER ---
@@ -510,8 +569,9 @@
             SIM_STATE.heatSourceFlame.material.emissiveIntensity = 0;
             distillationVaporPath.material.opacity = 0;
 
-            // Filtration Tank Dimensions (Consistent with createFiltrationBed)
-            const LIQUID_HEIGHT_REF = FILTRATION_LIQUID_MAX_HEIGHT; // 1.4
+            // Use values stored in mesh user data for accurate scaling
+            const LIQUID_BASE_Y = SIM_STATE.filtrationLiquidMesh.userData.liquidBaseY || (FILTRATION_TANK_HEIGHT / 2);
+            const LIQUID_HEIGHT_REF = SIM_STATE.filtrationLiquidMesh.userData.maxHeight || FILTRATION_TANK_HEIGHT; 
 
             // --- Global Liquid Movement (Separation/Filtration) ---
             const filterScale = data.filtration;
@@ -519,8 +579,8 @@
             // Scale the liquid mesh to the desired fill level
             SIM_STATE.filtrationLiquidMesh.scale.y = filterScale;
             
-            // Adjust position to keep the base of the mesh at Y=0 (platform level)
-            SIM_STATE.filtrationLiquidMesh.position.y = (LIQUID_HEIGHT_REF / 2) - (LIQUID_HEIGHT_REF * (1 - filterScale) / 2);
+            // Adjust position based on the new scale, anchored at LIQUID_BASE_Y
+            SIM_STATE.filtrationLiquidMesh.position.y = LIQUID_BASE_Y + (filterScale * LIQUID_HEIGHT_REF / 2); 
 
             // --- Global Collection Level (Liquid Fill) ---
             const collectScale = data.collection;
@@ -588,6 +648,8 @@
 
         function setupEventListeners() {
             document.getElementById('next-stage-button').addEventListener('click', handleNextStage);
+            // NEW: Add click listener for drawer interaction
+            renderer.domElement.addEventListener('click', onMouseClick, false);
         }
 
         // --- Animation Loop ---
@@ -606,7 +668,7 @@
                 if (bubbleTimer % 10 === 0) { // Add a new bubble every 10 frames
                     const newBubble = createBubble(new THREE.Vector3(
                         blenderTank.position.x + (Math.random() - 0.5) * 3.0,
-                        BLENDER_TANK_ELEVATION + (Math.random() * 2.5) - 0.5, // Bubbles start within the elevated tank (Y=1.0 to 3.5)
+                        BLENDER_TANK_ELEVATION + (Math.random() * 2.5) - 0.5, // Bubbles start within the elevated tank (Y=3.0 to 5.5)
                         blenderTank.position.z + (Math.random() - 0.5) * 3.0
                     ), 0.05); 
                     scene.add(newBubble);
@@ -617,7 +679,7 @@
                 bubbles.forEach((bubble, index) => {
                     bubble.position.add(bubble.velocity);
                     bubble.material.opacity -= 0.005; 
-                    if (bubble.position.y > 3.5 || bubble.material.opacity < 0.1) { // Max height of elevated tank
+                    if (bubble.position.y > 5.5 || bubble.material.opacity < 0.1) { // Max height of elevated tank
                         scene.remove(bubble);
                         bubbles.splice(index, 1); 
                     }
